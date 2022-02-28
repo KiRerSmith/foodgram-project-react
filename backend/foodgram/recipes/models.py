@@ -91,10 +91,31 @@ class Recipe(models.Model):
         verbose_name_plural = 'Рецепты'
 
     def __str__(self):
-        return self.text[:10]
+        return self.name
 
     def get_ingredients(self):
         return "\n".join([i.name for i in self.ingredients.all()])
 
     def get_tags(self):
         return "\n".join([i.name for i in self.tags.all()])
+
+    def count_favorite(self):
+        return Favorite.objects.filter(recipe=self.pk).count()
+
+
+class Favorite(models.Model):
+    user = models.ForeignKey(
+        User, on_delete=models.CASCADE,
+        related_name='cook',
+        verbose_name='Повар'
+    )
+    recipe = models.ForeignKey(
+        Recipe, on_delete=models.CASCADE,
+        related_name='recipe',
+        verbose_name='Рецепт'
+    )
+
+    class Meta:
+        ordering = ['pk']
+        verbose_name = 'избранное'
+        verbose_name_plural = 'Избранное'
