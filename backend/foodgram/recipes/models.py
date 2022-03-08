@@ -1,5 +1,5 @@
 # from django.contrib.auth import get_user_model
-from django.core.validators import MinValueValidator
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 
 """import sys
@@ -37,7 +37,11 @@ class Ingredient(models.Model):
         max_length=100,
         blank=False, null=True,
         verbose_name='Название')
-    amount = models.IntegerField('Количество')
+    amount = models.IntegerField(verbose_name='Количество', default=1,
+                                 validators=[
+                                    MinValueValidator(1, message='Количество не менее 1'),
+                                    MaxValueValidator(100000, message='Количество не более 100000'),
+                                 ])
     measurement_unit = models.CharField(
         max_length=15,
         blank=False, null=True,
@@ -107,7 +111,7 @@ class Favorite(models.Model):
     user = models.ForeignKey(
         User, on_delete=models.CASCADE,
         related_name='cook',
-        verbose_name='Повар'
+        verbose_name='Пользователь'
     )
     recipe = models.ForeignKey(
         Recipe, on_delete=models.CASCADE,
