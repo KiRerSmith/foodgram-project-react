@@ -130,3 +130,11 @@ dmypy.json
 
 # .idea
 .idea
+
+# custom ignore
+media
+.media
+.static
+static
+dj_static
+.media/media

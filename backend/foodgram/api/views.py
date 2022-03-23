@@ -3,6 +3,7 @@ from functools import partial
 from msilib.schema import CreateFolder
 from turtle import update
 from venv import create
+from django.contrib.auth import get_user_model, update_session_auth_hash
 from django.contrib.auth.tokens import PasswordResetTokenGenerator
 from django.core.mail import send_mail
 from django.db.models import Avg
@@ -22,9 +23,13 @@ from foodgram.settings import ADMIN_EMAIL
 from .pagination import UserPagination
 from .permissions import (IsAdmin, IsAdminOrReadOnly,
                           IsOwnerAdminModeratorOrReadOnly)
-from .serializers import (IngredientSerializer, RecipeSerializer,
+from .serializers import (CreateRecipeSerializer, FavoriteSerializer, IngredientSerializer, RecipeSerializer,
                           SubscriptionSerializer, TagSerializer,
                           UserSerializer)
+
+from djoser import signals, utils
+from djoser.conf import settings
+from djoser.compat import get_user_email
 """
 confirmation_token = PasswordResetTokenGenerator()
 
@@ -93,7 +98,7 @@ class UserViewSet(mixins.CreateModelMixin,
     serializer_class = UserSerializer
     pagination_class = UserPagination
     # (IsAdmin,)
-    permission_classes = [IsOwnerAdminModeratorOrReadOnly]
+    # permission_classes = [IsOwnerAdminModeratorOrReadOnly]
     filter_backends = (filters.SearchFilter,)
     search_fields = ('username',)
     # lookup_field = 'username'
@@ -108,6 +113,12 @@ class UserViewSet(mixins.CreateModelMixin,
         serializer.save()
 
     def get_serializer_class(self):
+        if self.action == "create":
+            return settings.SERIALIZERS.user_create
+        elif self.action == "set_password":
+            if settings.SET_PASSWORD_RETYPE:
+                return settings.SERIALIZERS.set_password_retype
+            return settings.SERIALIZERS.set_password
         return UserSerializer
 
     @action(detail=False)
@@ -116,6 +127,25 @@ class UserViewSet(mixins.CreateModelMixin,
         queryset = User.objects.filter(id=request_user.id)
         serializer = self.get_serializer(queryset, many=True)
         return Response(serializer.data)
+
+    @action(["post"], detail=False)
+    def set_password(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        self.request.user.set_password(serializer.data["new_password"])
+        self.request.user.save()
+
+        if settings.PASSWORD_CHANGED_EMAIL_CONFIRMATION:
+            context = {"user": self.request.user}
+            to = [get_user_email(self.request.user)]
+            settings.EMAIL.password_changed_confirmation(self.request, context).send(to)
+
+        if settings.LOGOUT_ON_PASSWORD_CHANGE:
+            utils.logout_user(self.request)
+        elif settings.CREATE_SESSION_ON_LOGIN:
+            update_session_auth_hash(self.request, self.request.user)
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 """
 class APIMe(APIView):
@@ -145,7 +175,7 @@ class APIMe(APIView):
 
 class RecipeViewSet(viewsets.ModelViewSet):
     queryset = Recipe.objects.all()
-    serializer_class = RecipeSerializer
+    # serializer_class = RecipeSerializer
     pagination_class = UserPagination
     permission_classes = [IsOwnerAdminModeratorOrReadOnly]
     filter_backends = (DjangoFilterBackend, )
@@ -153,10 +183,10 @@ class RecipeViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         return serializer.save(author=self.request.user)
 
-    """def get_serializer_class(self):
+    def get_serializer_class(self):
         if self.action in ('create', 'update', 'partial_update'):
             return CreateRecipeSerializer
-        return RetriveRecipeSerializer"""
+        return RecipeSerializer
 
 
 class TagViewSet(mixins.ListModelMixin,
@@ -175,6 +205,32 @@ class IngredientViewSet(mixins.ListModelMixin,
     serializer_class = IngredientSerializer
     pagination_class = UserPagination
     permission_classes = [IsOwnerAdminModeratorOrReadOnly]
+
+
+class FavoriteViewSet(mixins.CreateModelMixin,
+                      mixins.DestroyModelMixin,
+                      viewsets.GenericViewSet):
+
+    serializer_class = FavoriteSerializer
+    permission_classes = [IsAdmin]
+
+    def perform_create(self, serializer):
+        recipe_id = self.kwargs.get('recipe_id')
+        recipe = get_object_or_404(Recipe, pk=recipe_id)
+        user = self.request.user
+        if Favorite.objects.filter(user=user, recipe=recipe):
+            raise serializers.ValidationError(
+                'Нельзя добавить больше одного избранного!')
+        serializer.save(user=user,
+                        recipe=recipe)
+    # не работает удаление
+    def destroy(self, request, pk=None):
+        recipe_id = self.kwargs.get('recipe_id')
+        recipe = get_object_or_404(Recipe, pk=recipe_id)
+        user = self.request.user
+        Favorite.objects.filter(user=user, recipe=recipe).delete()
+        if not Favorite.objects.filter(recipe=recipe).exists():
+            return Response(status=status.HTTP_204_NO_CONTENT)
 
 # неправильно работает
 class SubscriptionViewSet(viewsets.ModelViewSet):

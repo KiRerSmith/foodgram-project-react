@@ -21,8 +21,8 @@ class User(AbstractUser):
     last_name = models.CharField(max_length=150, blank=False)
     role = models.TextField(choices=CHOICES, default=user)
 
-    # USERNAME_FIELD = 'email'
-    # REQUIRED_FIELDS = ['username', 'first_name', 'last_name']
+    USERNAME_FIELD = 'email'
+    REQUIRED_FIELDS = ['username', 'first_name', 'last_name']
 
     class Meta:
         constraints = (
