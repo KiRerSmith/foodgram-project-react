@@ -108,6 +108,26 @@ def favorite(request, recipe_id):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
+@api_view(['POST', 'DELETE'])
+def subscribe(request, author_id):
+    if request.method == 'DELETE':
+        subscription = get_object_or_404(Follow, user=request.user, author__id=author_id)
+        subscription.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+    elif request.method == 'POST':
+        serializer = SubscriptionSerializer(data=request.data)
+        if serializer.is_valid():
+            author = get_object_or_404(User, id=author_id)
+            if Follow.objects.filter(user=request.user, author_id=author_id):
+                raise serializers.ValidationError(
+                    'Нельзя добавить больше одной подписки!')
+            serializer.save(user=request.user,
+                            author_id=author_id)
+            # serializer = SubscriptionSerializer(author)
+            # не работает сериализатор в ответ - не находит юзера запроса
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
 
 class UserViewSet(mixins.CreateModelMixin,
                   mixins.ListModelMixin,
@@ -192,12 +212,14 @@ class APIMe(APIView):
             status=status.HTTP_401_UNAUTHORIZED)
 """
 
+
 class RecipeViewSet(viewsets.ModelViewSet):
     queryset = Recipe.objects.all()
     # serializer_class = RecipeSerializer
     pagination_class = UserPagination
     permission_classes = [IsOwnerAdminModeratorOrReadOnly]
     filter_backends = (DjangoFilterBackend, )
+    filterset_fields = ('is_favorited', 'author', 'tags')
 
     def perform_create(self, serializer):
         return serializer.save(author=self.request.user)
@@ -222,8 +244,11 @@ class IngredientViewSet(mixins.ListModelMixin,
                         viewsets.GenericViewSet):
     queryset = Ingredient.objects.all()
     serializer_class = IngredientSerializer
-    pagination_class = UserPagination
+    # pagination_class = UserPagination
     permission_classes = [IsOwnerAdminModeratorOrReadOnly]
+    filter_backends = (filters.SearchFilter,)
+    search_fields = ('name',)
+    
 
 # не используется
 class FavoriteViewSet(mixins.CreateModelMixin,

@@ -25,5 +25,6 @@ urlpatterns = [
     path('auth/', include('djoser.urls.authtoken')),
     path('auth/', include('djoser.urls.jwt')),
     path('recipes/<int:recipe_id>/favorite/', views.favorite),
+    path('users/<int:author_id>/subscribe/', views.subscribe),
     path('', include(router.urls)),
 ]

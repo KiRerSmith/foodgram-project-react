@@ -215,18 +215,17 @@ class FavoriteSerializer(serializers.ModelSerializer):
 
 
 class SubscriptionSerializer(serializers.ModelSerializer):
-    email = serializers.EmailField(source='author.email')
-    id = serializers.IntegerField(source='author.id')
-    username = serializers.CharField(source='author.username')
-    first_name = serializers.CharField(source='author.first_name')
-    last_name = serializers.CharField(source='author.last_name')
+    email = serializers.EmailField(source='author.email', required=False)
+    id = serializers.IntegerField(source='author.id', required=False)
+    username = serializers.CharField(source='author.username', required=False)
+    first_name = serializers.CharField(source='author.first_name', required=False)
+    last_name = serializers.CharField(source='author.last_name', required=False)
     is_subscribed = serializers.SerializerMethodField()
     recipes = serializers.SerializerMethodField()
     recipes_count = serializers.SerializerMethodField()
 
     class Meta:
         model = Follow
-        # fields = ('author', 'recipes')
         fields = (
             'email',
             'id',
