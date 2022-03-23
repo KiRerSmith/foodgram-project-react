@@ -23,7 +23,7 @@ from foodgram.settings import ADMIN_EMAIL
 from .pagination import UserPagination
 from .permissions import (IsAdmin, IsAdminOrReadOnly,
                           IsOwnerAdminModeratorOrReadOnly)
-from .serializers import (CreateRecipeSerializer, FavoriteSerializer, IngredientSerializer, RecipeSerializer,
+from .serializers import (CreateRecipeSerializer, FavoriteRecipeSerializer, FavoriteSerializer, IngredientSerializer, RecipeSerializer,
                           SubscriptionSerializer, TagSerializer,
                           UserSerializer)
 
@@ -88,6 +88,25 @@ def get_subscriptions(request):
     subscriptions = Follow.objects.filter(user_id=1)
     serializer = SubscriptionSerializer(subscriptions, many=True)
     return Response(serializer.data)"""
+@api_view(['POST', 'DELETE'])
+def favorite(request, recipe_id):
+    if request.method == 'DELETE':
+        favorite = get_object_or_404(Favorite, user=request.user, recipe__id=recipe_id)
+        favorite.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+    elif request.method == 'POST':
+        serializer = FavoriteSerializer(data=request.data)
+        if serializer.is_valid():
+            recipe = get_object_or_404(Recipe, pk=recipe_id)
+            if Favorite.objects.filter(user=request.user, recipe=recipe):
+                raise serializers.ValidationError(
+                    'Нельзя добавить больше одного избранного!')
+            serializer.save(user=request.user,
+                            recipe_id=recipe_id)
+            print_serializer = FavoriteRecipeSerializer(recipe)
+            return Response(print_serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
 
 
 class UserViewSet(mixins.CreateModelMixin,
@@ -206,14 +225,16 @@ class IngredientViewSet(mixins.ListModelMixin,
     pagination_class = UserPagination
     permission_classes = [IsOwnerAdminModeratorOrReadOnly]
 
-
+# не используется
 class FavoriteViewSet(mixins.CreateModelMixin,
                       mixins.DestroyModelMixin,
                       viewsets.GenericViewSet):
 
     serializer_class = FavoriteSerializer
     permission_classes = [IsAdmin]
+    # http_method_names = ['post', 'delete']
 
+    # @action(detail=True, methods=['post'], url_path='favorite')
     def perform_create(self, serializer):
         recipe_id = self.kwargs.get('recipe_id')
         recipe = get_object_or_404(Recipe, pk=recipe_id)
@@ -223,18 +244,38 @@ class FavoriteViewSet(mixins.CreateModelMixin,
                 'Нельзя добавить больше одного избранного!')
         serializer.save(user=user,
                         recipe=recipe)
+    
+    def get_object(self):
+        favorites = get_object_or_404(
+            Favorite,
+            recipe__id=self.kwargs['recipe_id'],
+        )
+        print(self.kwargs['recipe_id'])
+        return Favorite.objects.get(
+            user=self.request.user,
+            recipe=favorites,
+        )
+
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        return super(FavoriteViewSet, self).destroy(request, *args, **kwargs)
+
     # не работает удаление
-    def destroy(self, request, pk=None):
+    """def destroy(self, request, pk=None):
         recipe_id = self.kwargs.get('recipe_id')
         recipe = get_object_or_404(Recipe, pk=recipe_id)
         user = self.request.user
         Favorite.objects.filter(user=user, recipe=recipe).delete()
         if not Favorite.objects.filter(recipe=recipe).exists():
-            return Response(status=status.HTTP_204_NO_CONTENT)
+            return Response(status=status.HTTP_204_NO_CONTENT)"""
 
-# неправильно работает
-class SubscriptionViewSet(viewsets.ModelViewSet):
-    queryset = Follow.objects.all()
+
+class SubscriptionViewSet(mixins.ListModelMixin,
+                          viewsets.GenericViewSet):
     serializer_class = SubscriptionSerializer
     pagination_class = UserPagination
     permission_classes = [IsOwnerAdminModeratorOrReadOnly]
+    http_method_names = ['get']
+
+    def get_queryset(self):
+        return Follow.objects.filter(user=self.request.user)
