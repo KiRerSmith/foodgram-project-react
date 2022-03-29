@@ -3,6 +3,7 @@ from functools import partial
 from msilib.schema import CreateFolder
 from turtle import update
 from venv import create
+from django.http import HttpResponse
 from django.contrib.auth import get_user_model, update_session_auth_hash
 from django.contrib.auth.tokens import PasswordResetTokenGenerator
 from django.core.mail import send_mail
@@ -16,7 +17,7 @@ from rest_framework.decorators import action, api_view
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import AccessToken
-from recipes.models import Favorite, Ingredient, Recipe, Tag
+from recipes.models import Favorite, Ingredient, Recipe, ShoppingCart, Tag
 from users.models import Follow, User
 from foodgram.settings import ADMIN_EMAIL
 
@@ -24,7 +25,7 @@ from .pagination import UserPagination
 from .permissions import (IsAdmin, IsAdminOrReadOnly,
                           IsOwnerAdminModeratorOrReadOnly)
 from .serializers import (CreateRecipeSerializer, FavoriteRecipeSerializer, FavoriteSerializer, IngredientSerializer, RecipeSerializer,
-                          SubscriptionSerializer, TagSerializer,
+                          ShoppingCartSerializer, SubscriptionSerializer, TagSerializer,
                           UserSerializer)
 
 from djoser import signals, utils
@@ -107,6 +108,24 @@ def favorite(request, recipe_id):
             return Response(print_serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+@api_view(['POST', 'DELETE'])
+def shopping_cart(request, recipe_id):
+    if request.method == 'DELETE':
+        shopping_cart = get_object_or_404(ShoppingCart, user=request.user, recipe__id=recipe_id)
+        shopping_cart.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+    elif request.method == 'POST':
+        serializer = ShoppingCartSerializer(data=request.data)
+        if serializer.is_valid():
+            recipe = get_object_or_404(Recipe, pk=recipe_id)
+            if ShoppingCart.objects.filter(user=request.user, recipe=recipe):
+                raise serializers.ValidationError(
+                    'Нельзя добавить больше одного рецепта в список!')
+            serializer.save(user=request.user,
+                            recipe_id=recipe_id)
+            print_serializer = FavoriteRecipeSerializer(recipe)
+            return Response(print_serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 @api_view(['POST', 'DELETE'])
 def subscribe(request, author_id):
@@ -127,6 +146,36 @@ def subscribe(request, author_id):
             # не работает сериализатор в ответ - не находит юзера запроса
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+@api_view(['GET'])
+def download_shopping_cart(request):
+    user = request.user
+    # shopping_cart = ShoppingCart.objects.filter(user=user).values()
+    shopping_cart_list = list(user.buyer.all().values())
+    recipe_id_list = []
+    for element in shopping_cart_list:
+        recipe_id_list.append(element['recipe_id'])
+    recipe_queryset = Recipe.objects.filter(id__in=recipe_id_list)
+    ingredients_list = []
+    for i in recipe_id_list:
+        ingredients_list.append(list(recipe_queryset.get(pk=i).ingredients.values()))
+    newdict_list = []
+    ingr_name_list = set()
+    for ingredient_list in ingredients_list:
+        for j in range(len(ingredient_list)):
+            # id_list.append(ingredient_list[j]['id'])
+            ingr_name = ingredient_list[j]['name']
+            if ingr_name not in ingr_name_list:
+                ingr_name_list.add(ingr_name)
+                newdict_list.append(ingredient_list[j])
+            else:
+                qri = Ingredient.objects.filter(name=ingr_name).values()
+                print(list(qri))
+    print(ingr_name_list)
+    
+    print(newdict_list)
+    # print(dict)
+    return HttpResponse(ingredients_list)
 
 
 class UserViewSet(mixins.CreateModelMixin,
@@ -219,7 +268,7 @@ class RecipeViewSet(viewsets.ModelViewSet):
     pagination_class = UserPagination
     permission_classes = [IsOwnerAdminModeratorOrReadOnly]
     filter_backends = (DjangoFilterBackend, )
-    filterset_fields = ('is_favorited', 'author', 'tags')
+    filterset_fields = ('author', 'tags')
 
     def perform_create(self, serializer):
         return serializer.save(author=self.request.user)
@@ -235,7 +284,7 @@ class TagViewSet(mixins.ListModelMixin,
                  viewsets.GenericViewSet):
     queryset = Tag.objects.all()
     serializer_class = TagSerializer
-    pagination_class = UserPagination
+    # pagination_class = UserPagination
     permission_classes = [IsOwnerAdminModeratorOrReadOnly]
 
 
@@ -269,7 +318,7 @@ class FavoriteViewSet(mixins.CreateModelMixin,
                 'Нельзя добавить больше одного избранного!')
         serializer.save(user=user,
                         recipe=recipe)
-    
+
     def get_object(self):
         favorites = get_object_or_404(
             Favorite,

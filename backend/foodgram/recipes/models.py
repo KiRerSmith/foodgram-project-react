@@ -37,11 +37,11 @@ class Ingredient(models.Model):
         max_length=100,
         blank=False, null=True,
         verbose_name='Название')
-    amount = models.IntegerField(verbose_name='Количество', default=1,
+    """amount = models.IntegerField(verbose_name='Количество', default=1,
                                  validators=[
                                     MinValueValidator(1, message='Количество не менее 1'),
                                     MaxValueValidator(100000, message='Количество не более 100000'),
-                                 ])
+                                 ])"""
     measurement_unit = models.CharField(
         max_length=15,
         blank=False, null=True,
@@ -107,6 +107,35 @@ class Recipe(models.Model):
         return Favorite.objects.filter(recipe=self.pk).count()
 
 
+class IngredientAmount(models.Model):
+    ingredient = models.ForeignKey(
+        Ingredient, on_delete=models.CASCADE,
+        related_name='ingredient_amount',
+        verbose_name='Ингредиент'
+    )
+    recipe = models.ForeignKey(
+        Recipe, on_delete=models.CASCADE,
+        related_name='recipe_amount',
+        verbose_name='Рецепт'
+    )
+    amount = models.IntegerField(verbose_name='Количество', default=1,
+                                 validators=[
+                                    MinValueValidator(1, message='Количество не менее 1'),
+                                    MaxValueValidator(100000, message='Количество не более 100000'),
+                                 ])
+
+    class Meta:
+        ordering = ['pk']
+        verbose_name = 'Количество ингредиента'
+        verbose_name_plural = 'Объекты количества ингредиентов'
+        constraints = [
+            models.UniqueConstraint(
+                fields=['recipe', 'ingredient'],
+                name='unique_ingredient'
+            )
+        ]
+
+
 class Favorite(models.Model):
     user = models.ForeignKey(
         User, on_delete=models.CASCADE,
@@ -123,3 +152,21 @@ class Favorite(models.Model):
         ordering = ['pk']
         verbose_name = 'избранное'
         verbose_name_plural = 'Избранное'
+
+
+class ShoppingCart(models.Model):
+    user = models.ForeignKey(
+        User, on_delete=models.CASCADE,
+        related_name='buyer',
+        verbose_name='Покупатель'
+    )
+    recipe = models.ForeignKey(
+        Recipe, on_delete=models.CASCADE,
+        related_name='shoppingrecipe',
+        verbose_name='Рецепт для покупок'
+    )
+
+    class Meta:
+        ordering = ['pk']
+        verbose_name = 'Список покупок'
+        verbose_name_plural = 'Списки покупок'
