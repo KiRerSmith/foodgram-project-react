@@ -21,7 +21,6 @@ router.register(
 router.register('users', views.UserViewSet, basename='userviewset')
 
 urlpatterns = [
-    # path('auth/', include('djoser.urls')),
     path('auth/', include('djoser.urls.authtoken')),
     path('auth/', include('djoser.urls.jwt')),
     path('recipes/<int:recipe_id>/favorite/', views.favorite),

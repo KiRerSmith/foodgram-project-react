@@ -3,15 +3,15 @@ from django.contrib.auth import update_session_auth_hash
 from django.shortcuts import get_object_or_404
 from django_filters.filters import CharFilter
 from django_filters.rest_framework import DjangoFilterBackend, FilterSet
-from rest_framework import filters, mixins, serializers, status, viewsets
-from rest_framework.decorators import action, api_view
+from rest_framework import mixins, serializers, status, viewsets
+from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.response import Response
 from recipes.models import Favorite, Ingredient, Recipe, ShoppingCart, Tag
 from users.models import Follow, User
 
 from .pagination import UserPagination
-from .permissions import (IsAdmin, IsAdminOrReadOnly,
-                          IsOwnerAdminModeratorOrReadOnly)
+from .permissions import (IsAuthenticated,
+                          IsOwnerAdminOrReadOnly, IsAuthenticatedReadOnly)
 from .serializers import (CreateRecipeSerializer, FavoriteRecipeSerializer,
                           FavoriteSerializer, IngredientSerializer,
                           RecipeSerializer, ShoppingCartSerializer,
@@ -24,6 +24,7 @@ from djoser.compat import get_user_email
 
 
 @api_view(['POST', 'DELETE'])
+@permission_classes([IsAuthenticated])
 def favorite(request, recipe_id):
     if request.method == 'DELETE':
         favorite = get_object_or_404(
@@ -39,7 +40,7 @@ def favorite(request, recipe_id):
             recipe = get_object_or_404(Recipe, pk=recipe_id)
             if Favorite.objects.filter(user=request.user, recipe=recipe):
                 raise serializers.ValidationError(
-                    'Нельзя добавить больше одного избранного!')
+                    {'errors': 'Нельзя больше одного избранного!'})
             serializer.save(user=request.user,
                             recipe_id=recipe_id)
             print_serializer = FavoriteRecipeSerializer(recipe)
@@ -47,10 +48,14 @@ def favorite(request, recipe_id):
                 print_serializer.data,
                 status=status.HTTP_201_CREATED
             )
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        return Response(
+            serializer.errors,
+            status=status.HTTP_400_BAD_REQUEST
+        )
 
 
 @api_view(['POST', 'DELETE'])
+@permission_classes([IsAuthenticated])
 def shopping_cart(request, recipe_id):
     if request.method == 'DELETE':
         shopping_cart = get_object_or_404(
@@ -64,9 +69,12 @@ def shopping_cart(request, recipe_id):
         serializer = ShoppingCartSerializer(data=request.data)
         if serializer.is_valid():
             recipe = get_object_or_404(Recipe, pk=recipe_id)
-            if ShoppingCart.objects.filter(user=request.user, recipe=recipe):
+            if ShoppingCart.objects.filter(
+                user=request.user,
+                recipe=recipe
+            ):
                 raise serializers.ValidationError(
-                    'Нельзя добавить больше одного рецепта в список!')
+                    {'errors': 'Рецепт уже в списке покупок!'})
             serializer.save(user=request.user,
                             recipe_id=recipe_id)
             print_serializer = FavoriteRecipeSerializer(recipe)
@@ -74,10 +82,14 @@ def shopping_cart(request, recipe_id):
                 print_serializer.data,
                 status=status.HTTP_201_CREATED
             )
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        return Response(
+            serializer.errors,
+            status=status.HTTP_400_BAD_REQUEST
+        )
 
 
 @api_view(['POST', 'DELETE'])
+@permission_classes([IsAuthenticated])
 def subscribe(request, author_id):
     if request.method == 'DELETE':
         subscription = get_object_or_404(
@@ -88,21 +100,23 @@ def subscribe(request, author_id):
         subscription.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
     elif request.method == 'POST':
-        serializer = SubscriptionSerializer(data=request.data)
+        serializer = SubscriptionSerializer(
+            data=request.data,
+            context={'request': request}
+        )
         if serializer.is_valid():
             author = get_object_or_404(User, id=author_id)
-            if Follow.objects.filter(user=request.user, author_id=author_id):
+            if Follow.objects.filter(user=request.user, author_id=author.id):
                 raise serializers.ValidationError(
-                    'Нельзя добавить больше одной подписки!')
+                    {'errors': 'Нельзя добавить больше одной подписки!'})
             serializer.save(user=request.user,
-                            author_id=author_id)
-            # serializer = SubscriptionSerializer(author)
-            # не работает сериализатор в ответ - не находит юзера запроса
+                            author_id=author.id)
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 @api_view(['GET'])
+@permission_classes([IsAuthenticated])
 def download_shopping_cart(request):
     user = request.user
     shopping_cart_list = list(user.buyer.all().values())
@@ -138,8 +152,9 @@ def download_shopping_cart(request):
         file.read(),
         content_type='text/plain; charset=UTF-8'
     )
-    response['Content-Disposition'] = ('attachment; filename="shop_list.txt"')
-
+    response['Content-Disposition'] = (
+        'attachment; filename="shop_list.txt"'
+    )
     return response
 
 
@@ -150,11 +165,7 @@ class UserViewSet(mixins.CreateModelMixin,
     queryset = User.objects.all()
     serializer_class = UserSerializer
     pagination_class = UserPagination
-    # (IsAdmin,)
-    # permission_classes = [IsOwnerAdminModeratorOrReadOnly]
-    filter_backends = (filters.SearchFilter,)
-    search_fields = ('username',)
-    # lookup_field = 'username'
+    permission_classes = [IsOwnerAdminOrReadOnly]
 
     def retrieve(self, request, pk=None):
         queryset = User.objects.filter(pk=pk)
@@ -174,14 +185,19 @@ class UserViewSet(mixins.CreateModelMixin,
             return settings.SERIALIZERS.set_password
         return UserSerializer
 
-    @action(detail=False)
+    def get_permissions(self):
+        if self.action == 'retrieve':
+            return (IsAuthenticated(),)
+        return super().get_permissions()
+
+    @action(detail=False, permission_classes=[IsAuthenticated])
     def me(self, request):
         request_user = request.user
         queryset = User.objects.filter(id=request_user.id)
         serializer = self.get_serializer(queryset, many=True)
         return Response(serializer.data)
 
-    @action(["post"], detail=False)
+    @action(["post"], detail=False, permission_classes=[IsAuthenticated])
     def set_password(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -214,15 +230,12 @@ class RecipeFilter(FilterSet):
 
 
 class RecipeViewSet(viewsets.ModelViewSet):
-    # queryset = Recipe.objects.all()
-    # serializer_class = RecipeSerializer
     pagination_class = UserPagination
-    permission_classes = [IsOwnerAdminModeratorOrReadOnly]
+    permission_classes = [IsOwnerAdminOrReadOnly]
     filter_backends = [DjangoFilterBackend]
     filterset_class = RecipeFilter
 
     def get_queryset(self):
-        # queryset = Recipe.objects.all()
         is_favorited = self.request.query_params.get('is_favorited')
         is_in_shopping_cart = self.request.query_params.get(
             'is_in_shopping_cart'
@@ -276,8 +289,15 @@ class TagViewSet(mixins.ListModelMixin,
                  viewsets.GenericViewSet):
     queryset = Tag.objects.all()
     serializer_class = TagSerializer
-    # pagination_class = UserPagination
-    permission_classes = [IsOwnerAdminModeratorOrReadOnly]
+    permission_classes = [IsOwnerAdminOrReadOnly]
+
+
+class IngredientFilter(FilterSet):
+    name = CharFilter(field_name='name', lookup_expr='istartswith')
+
+    class Meta:
+        model = Ingredient
+        fields = ['name']
 
 
 class IngredientViewSet(mixins.ListModelMixin,
@@ -285,18 +305,16 @@ class IngredientViewSet(mixins.ListModelMixin,
                         viewsets.GenericViewSet):
     queryset = Ingredient.objects.all()
     serializer_class = IngredientSerializer
-    # pagination_class = UserPagination
-    permission_classes = [IsOwnerAdminModeratorOrReadOnly]
-    filter_backends = (filters.SearchFilter,)
-    search_fields = ('name',)
+    permission_classes = [IsOwnerAdminOrReadOnly]
+    filter_backends = (DjangoFilterBackend,)
+    filterset_class = IngredientFilter
 
 
 class SubscriptionViewSet(mixins.ListModelMixin,
                           viewsets.GenericViewSet):
     serializer_class = SubscriptionSerializer
     pagination_class = UserPagination
-    permission_classes = [IsOwnerAdminModeratorOrReadOnly]
-    http_method_names = ['get']
+    permission_classes = [IsAuthenticatedReadOnly]
 
     def get_queryset(self):
         return Follow.objects.filter(user=self.request.user)

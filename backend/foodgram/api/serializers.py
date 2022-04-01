@@ -206,7 +206,6 @@ class CreateRecipeSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         # request_data = self.context.get('request').data['ingredients']
-        print(validated_data)
         ingredients_data = validated_data.pop('ingredients')
         tags_data = validated_data.pop('tags')
         ingredients_list = []
@@ -217,8 +216,6 @@ class CreateRecipeSerializer(serializers.ModelSerializer):
         ingredients = Ingredient.objects.filter(id__in=ingredients_list)
         tags = Tag.objects.filter(name__in=tags_data)
         recipe = Recipe.objects.create(**validated_data)
-        print(ingredients_data)
-        print(validated_data)
         # recipe.ingredients.set(ingredients)
         recipe.tags.set(tags)
         for j in range(len(ingredients_data)):
@@ -260,7 +257,6 @@ class CreateRecipeSerializer(serializers.ModelSerializer):
         return instance
 
     def get_ingredients(self, obj):
-        print('recipe serz')
         return CreateRecipeIngredientSerializer(
             self.data.get('ingredients'),
             many=True,
@@ -330,7 +326,12 @@ class SubscriptionSerializer(serializers.ModelSerializer):
         ).exists()
 
     def get_recipes(self, obj):
-        queryset = obj.author.recipes.all()
+        limit = self.context.get('request').query_params.get('recipes_limit')
+        if limit is not None:
+            limit = int(limit)
+        else:
+            limit = 2
+        queryset = obj.author.recipes.all()[:limit]
         return FavoriteRecipeSerializer(queryset, many=True).data
 
     def get_recipes_count(self, obj):
