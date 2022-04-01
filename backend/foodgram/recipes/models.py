@@ -37,11 +37,6 @@ class Ingredient(models.Model):
         max_length=100,
         blank=False, null=True,
         verbose_name='Название')
-    """amount = models.IntegerField(verbose_name='Количество', default=1,
-                                 validators=[
-                                    MinValueValidator(1, message='Количество не менее 1'),
-                                    MaxValueValidator(100000, message='Количество не более 100000'),
-                                 ])"""
     measurement_unit = models.CharField(
         max_length=15,
         blank=False, null=True,
@@ -74,6 +69,8 @@ class Recipe(models.Model):
     text = models.TextField(verbose_name='Описание')
     ingredients = models.ManyToManyField(
         Ingredient,
+        through='IngredientAmount',
+        through_fields=('recipe', 'ingredient'),
         verbose_name='Ингредиенты'
     )
     tags = models.ManyToManyField(Tag, verbose_name='Тэги')
@@ -120,8 +117,14 @@ class IngredientAmount(models.Model):
     )
     amount = models.IntegerField(verbose_name='Количество', default=1,
                                  validators=[
-                                    MinValueValidator(1, message='Количество не менее 1'),
-                                    MaxValueValidator(100000, message='Количество не более 100000'),
+                                    MinValueValidator(
+                                        1,
+                                        message='Количество не менее 1'
+                                    ),
+                                    MaxValueValidator(
+                                        100000,
+                                        message='Количество не более 100000'
+                                    ),
                                  ])
 
     class Meta:
