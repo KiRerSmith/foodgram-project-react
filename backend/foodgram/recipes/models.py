@@ -1,13 +1,7 @@
-# from django.contrib.auth import get_user_model
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 
-"""import sys
-sys.path.append('/foodgram/users/models')
-import User"""
 from users.models import User
-
-# User = get_user_model()
 
 
 class Tag(models.Model):
@@ -62,7 +56,6 @@ class Recipe(models.Model):
         blank=False, null=True,
         verbose_name='Название')
     image = models.ImageField(
-        upload_to='media/',
         blank=False, null=True,
         verbose_name='Картинка'
     )

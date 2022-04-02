@@ -205,7 +205,6 @@ class CreateRecipeSerializer(serializers.ModelSerializer):
                   'image', 'name', 'text', 'cooking_time')
 
     def create(self, validated_data):
-        # request_data = self.context.get('request').data['ingredients']
         ingredients_data = validated_data.pop('ingredients')
         tags_data = validated_data.pop('tags')
         ingredients_list = []
@@ -216,7 +215,6 @@ class CreateRecipeSerializer(serializers.ModelSerializer):
         ingredients = Ingredient.objects.filter(id__in=ingredients_list)
         tags = Tag.objects.filter(name__in=tags_data)
         recipe = Recipe.objects.create(**validated_data)
-        # recipe.ingredients.set(ingredients)
         recipe.tags.set(tags)
         for j in range(len(ingredients_data)):
             recipe.ingredients.add(
@@ -227,7 +225,6 @@ class CreateRecipeSerializer(serializers.ModelSerializer):
         return recipe
 
     def update(self, instance, validated_data):
-        # request_data = self.context.get('request').data['ingredients']
         ingredients_data = validated_data.pop('ingredients')
         tags_data = validated_data.pop('tags')
         ingredients_list = []
@@ -238,14 +235,13 @@ class CreateRecipeSerializer(serializers.ModelSerializer):
         instance.ingredients.clear()
         ingredients = Ingredient.objects.filter(id__in=ingredients_list)
         tags = Tag.objects.filter(name__in=tags_data)
-        # instance.image = validated_data.get('image', instance.image)
+        instance.image = validated_data.get('image', instance.image)
         instance.name = validated_data.get('name', instance.name)
         instance.text = validated_data.get('text', instance.text)
         instance.cooking_time = validated_data.get(
             'cooking_time',
             instance.cooking_time
         )
-        # instance.ingredients.set(ingredients)
         instance.tags.set(tags)
         instance.save()
         for j in range(len(ingredients_data)):

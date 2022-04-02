@@ -1,7 +1,7 @@
 from django.http import HttpResponse
 from django.contrib.auth import update_session_auth_hash
 from django.shortcuts import get_object_or_404
-from django_filters.filters import CharFilter
+from django_filters.filters import CharFilter, ModelMultipleChoiceFilter
 from django_filters.rest_framework import DjangoFilterBackend, FilterSet
 from rest_framework import mixins, serializers, status, viewsets
 from rest_framework.decorators import action, api_view, permission_classes
@@ -168,8 +168,11 @@ class UserViewSet(mixins.CreateModelMixin,
     permission_classes = [IsOwnerAdminOrReadOnly]
 
     def retrieve(self, request, pk=None):
-        queryset = User.objects.filter(pk=pk)
-        serializer = self.get_serializer(queryset, many=True)
+        pk_user = get_object_or_404(
+            User,
+            pk=pk
+        )
+        serializer = self.get_serializer(pk_user)
         return Response(serializer.data)
 
     def perform_create(self, serializer):
@@ -193,8 +196,11 @@ class UserViewSet(mixins.CreateModelMixin,
     @action(detail=False, permission_classes=[IsAuthenticated])
     def me(self, request):
         request_user = request.user
-        queryset = User.objects.filter(id=request_user.id)
-        serializer = self.get_serializer(queryset, many=True)
+        me_user = get_object_or_404(
+            User,
+            id=request_user.id
+        )
+        serializer = self.get_serializer(me_user)
         return Response(serializer.data)
 
     @action(["post"], detail=False, permission_classes=[IsAuthenticated])
@@ -221,8 +227,12 @@ class UserViewSet(mixins.CreateModelMixin,
 
 
 class RecipeFilter(FilterSet):
-    tags = CharFilter(field_name='tags__slug')
-    author = CharFilter(field_name='author__slug')
+    tags = ModelMultipleChoiceFilter(
+        field_name='tags__slug',
+        to_field_name='slug',
+        conjoined=False,
+        queryset=Tag.objects.all()
+    )
 
     class Meta:
         model = Recipe
@@ -245,14 +255,18 @@ class RecipeViewSet(viewsets.ModelViewSet):
             recipes_id = []
             for i in range(favorited.count()):
                 recipes_id.append(favorited.values()[i]['recipe_id'])
-            return Recipe.objects.filter(id__in=recipes_id)
+            return Recipe.objects.filter(
+                id__in=recipes_id
+            ).order_by('-created')
         if is_in_shopping_cart is not None and is_in_shopping_cart == '1':
             shopping_cart = ShoppingCart.objects.filter(user=self.request.user)
             recipes_id = []
             for i in range(shopping_cart.count()):
                 recipes_id.append(shopping_cart.values()[i]['recipe_id'])
-            return Recipe.objects.filter(id__in=recipes_id)
-        return Recipe.objects.all()
+            return Recipe.objects.filter(
+                id__in=recipes_id
+            ).order_by('-created')
+        return Recipe.objects.all().order_by('-created')
 
     def perform_create(self, serializer):
         return serializer.save(author=self.request.user)

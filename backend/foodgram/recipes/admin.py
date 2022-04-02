@@ -6,8 +6,7 @@ from .models import (Favorite, Ingredient, IngredientAmount, Recipe,
 
 class IngredientAdmin(admin.ModelAdmin):
     list_display = ('pk', 'name', 'measurement_unit')
-    search_fields = ('name',)
-    list_filter = ('measurement_unit',)
+    list_filter = ('name',)
     empty_value_display = '-пусто-'
 
 
@@ -29,9 +28,13 @@ class RecipeAdmin(admin.ModelAdmin):
         'pk', 'name', 'author', 'text', 'created', 'count_favorite',
         'cooking_time', 'get_tags', 'get_ingredients', 'image'
     )
+    readonly_fields = ('favorite_count',)
     search_fields = ('text',)
     list_filter = ('name', 'author', 'tags',)
     empty_value_display = '-пусто-'
+
+    def favorite_count(self, obj):
+        return Favorite.objects.filter(recipe=obj.pk).count()
 
 
 class IngredientAmountAdmin(admin.ModelAdmin):
