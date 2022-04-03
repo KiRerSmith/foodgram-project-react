@@ -138,3 +138,5 @@ media
 static
 dj_static
 .media/media
+frontend
+.frontend
