@@ -142,12 +142,12 @@ def download_shopping_cart(request):
             ingr_list.append(str(ingr['amount']))
             shop_list.append(ingr['ingredient_id'])
             shop_list.append(ingr_list)
-    file = open('shop_list.txt', 'w')
+    file = open('media/shop_list.txt', 'w')
     for j in range(len(shop_list) // 2):
         file.write(' '.join(shop_list[j * 2 + 1]))
         file.write("\n")
     file.close()
-    file = open('shop_list.txt', 'r')
+    file = open('media/shop_list.txt', 'r')
     response = HttpResponse(
         file.read(),
         content_type='text/plain; charset=UTF-8'
