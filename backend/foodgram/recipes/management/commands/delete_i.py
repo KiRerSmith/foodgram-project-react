@@ -1,6 +1,9 @@
 import csv
+
 from django.core.management import BaseCommand
+
 from recipes.models import Ingredient
+
 
 class Command(BaseCommand):
     help = 'Delete dara from database'

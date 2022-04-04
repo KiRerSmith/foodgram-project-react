@@ -1,26 +1,25 @@
-from django.http import HttpResponse
 from django.contrib.auth import update_session_auth_hash
+from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
 from django_filters.filters import CharFilter, ModelMultipleChoiceFilter
 from django_filters.rest_framework import DjangoFilterBackend, FilterSet
+from djoser import utils
+from djoser.compat import get_user_email
+from djoser.conf import settings
+from recipes.models import Favorite, Ingredient, Recipe, ShoppingCart, Tag
 from rest_framework import mixins, serializers, status, viewsets
 from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.response import Response
-from recipes.models import Favorite, Ingredient, Recipe, ShoppingCart, Tag
 from users.models import Follow, User
 
 from .pagination import UserPagination
-from .permissions import (IsAuthenticated,
-                          IsOwnerAdminOrReadOnly, IsAuthenticatedReadOnly)
+from .permissions import (IsAuthenticated, IsAuthenticatedReadOnly,
+                          IsOwnerAdminOrReadOnly)
 from .serializers import (CreateRecipeSerializer, FavoriteRecipeSerializer,
                           FavoriteSerializer, IngredientSerializer,
                           RecipeSerializer, ShoppingCartSerializer,
                           SubscriptionSerializer, TagSerializer,
                           UserSerializer)
-
-from djoser import utils
-from djoser.conf import settings
-from djoser.compat import get_user_email
 
 
 @api_view(['POST', 'DELETE'])
