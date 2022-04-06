@@ -1,6 +1,7 @@
 import base64
 import time
-
+from drf_extra_fields.fields import Base64ImageField
+from django.shortcuts import get_object_or_404
 from django.contrib.auth.password_validation import validate_password
 from django.core import exceptions as django_exceptions
 from django.core.files.base import ContentFile
@@ -39,11 +40,17 @@ class UserSerializer(serializers.ModelSerializer):
         username = data.get('username')
         email = data.get('email')
         if User.objects.filter(username=username).exists():
-            raise ValidationError('Такой пользователь уже существует')
+            raise ValidationError(
+                {'errors': 'Такой пользователь уже существует'}
+            )
         if username == 'me':
-            raise ValidationError('Данный юзернейм недоступен')
+            raise ValidationError(
+                {'errors': 'Данный юзернейм недоступен'}
+            )
         if User.objects.filter(email=email).exists():
-            raise ValidationError('Пользователь с таким email уже существует')
+            raise ValidationError(
+                {'errors': 'Пользователь с таким email уже существует'}
+            )
         return data
 
     def get_is_subscribed(self, obj):
@@ -57,12 +64,12 @@ class UserSerializer(serializers.ModelSerializer):
 
 class UserCreateSerializer(serializers.ModelSerializer):
     password = serializers.CharField(
-        style={"input_type": "password"},
+        style={'input_type': 'password'},
         write_only=True
     )
     msg = settings.CONSTANTS.messages.CANNOT_CREATE_USER_ERROR
     default_error_messages = {
-        "cannot_create_user": msg
+        'cannot_create_user': msg
     }
 
     class Meta:
@@ -70,19 +77,19 @@ class UserCreateSerializer(serializers.ModelSerializer):
         fields = tuple(User.REQUIRED_FIELDS) + (
             settings.LOGIN_FIELD,
             settings.USER_ID_FIELD,
-            "password",
+            'password',
         )
 
     def validate(self, attrs):
         user = User(**attrs)
-        password = attrs.get("password")
+        password = attrs.get('password')
 
         try:
             validate_password(password, user)
         except django_exceptions.ValidationError as e:
             serializer_error = serializers.as_serializer_error(e)
             raise serializers.ValidationError(
-                {"password": serializer_error["non_field_errors"]}
+                {'password': serializer_error['non_field_errors']}
             )
 
         return attrs
@@ -91,7 +98,7 @@ class UserCreateSerializer(serializers.ModelSerializer):
         try:
             user = self.perform_create(validated_data)
         except IntegrityError:
-            self.fail("cannot_create_user")
+            self.fail('cannot_create_user')
 
         return user
 
@@ -100,7 +107,7 @@ class UserCreateSerializer(serializers.ModelSerializer):
             user = User.objects.create_user(**validated_data)
             if settings.SEND_ACTIVATION_EMAIL:
                 user.is_active = False
-                user.save(update_fields=["is_active"])
+                user.save(update_fields=['is_active'])
         return user
 
 
@@ -108,26 +115,7 @@ class TagSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Tag
-        fields = ('id', 'name', 'color', 'slug')
-
-
-class CustomImageField(serializers.ImageField):
-
-    def to_internal_value(self, data):
-        t = time.localtime()
-        t = str(time.mktime(t))[:-2]
-        format, imgstr = data.split(';base64,')
-        ext = format.split('/')[-1]
-        try:
-            decode = ContentFile(
-                base64.b64decode(imgstr),
-                name=f'img{t}.{ext}'
-            )
-        except ValueError:
-            raise serializers.ValidationError(
-                'Картинка должна быть кодирована в base64'
-            )
-        return decode
+        fields = '__all__'
 
 
 class IngredientSerializer(serializers.ModelSerializer):
@@ -147,8 +135,12 @@ class RecipeIngredientSerializer(serializers.ModelSerializer):
     def get_amount(self, obj):
         recipe_id = self.context.get('recipe_id')
         ingredient_id = obj.id
-        return IngredientAmount.objects.get(
-            ingredient_id=ingredient_id, recipe_id=recipe_id).amount
+        ingredient_amount = get_object_or_404(
+            IngredientAmount,
+            ingredient_id=ingredient_id,
+            recipe_id=recipe_id
+        )
+        return ingredient_amount.amount
 
 
 class FavoriteRecipeSerializer(serializers.ModelSerializer):
@@ -171,7 +163,6 @@ class RecipeSerializer(serializers.ModelSerializer):
     tags = TagSerializer(many=True, required=True)
     author = UserSerializer(required=True)
     ingredients = serializers.SerializerMethodField()
-    image = serializers.SerializerMethodField()
     is_favorited = serializers.SerializerMethodField()
     is_in_shopping_cart = serializers.SerializerMethodField()
 
@@ -180,9 +171,6 @@ class RecipeSerializer(serializers.ModelSerializer):
         fields = ('id', 'tags', 'author', 'ingredients',
                   'is_favorited', 'is_in_shopping_cart',
                   'name', 'image', 'text', 'cooking_time')
-
-    def get_image(self, obj):
-        return obj.image.url
 
     def get_is_favorited(self, obj):
         user = self.context.get('request').user
@@ -207,7 +195,7 @@ class RecipeSerializer(serializers.ModelSerializer):
 
 class CreateRecipeSerializer(serializers.ModelSerializer):
     ingredients = CreateRecipeIngredientSerializer(many=True, required=True)
-    image = CustomImageField(required=True)
+    image = Base64ImageField(max_length=None, use_url=False)
 
     class Meta:
         model = Recipe
@@ -322,6 +310,13 @@ class SubscriptionSerializer(serializers.ModelSerializer):
             'is_subscribed',
             'recipes',
             'recipes_count',)
+
+    def validate(self, data):
+        request_user = self.context.get('request').user
+        author_id = data.get('id')
+        if request_user.id == author_id:
+            raise ValidationError({'errors': 'Нельзя подписываться на себя!'})
+        return data
 
     def get_is_subscribed(self, obj):
         user = self.context.get('request').user

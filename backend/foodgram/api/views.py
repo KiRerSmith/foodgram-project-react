@@ -1,8 +1,7 @@
 from django.contrib.auth import update_session_auth_hash
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
-from django_filters.filters import CharFilter, ModelMultipleChoiceFilter
-from django_filters.rest_framework import DjangoFilterBackend, FilterSet
+from django_filters.rest_framework import DjangoFilterBackend
 from djoser import utils
 from djoser.compat import get_user_email
 from djoser.conf import settings
@@ -12,6 +11,7 @@ from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.response import Response
 from users.models import Follow, User
 
+from .filters import IngredientFilter, RecipeFilter
 from .pagination import UserPagination
 from .permissions import (IsAuthenticated, IsAuthenticatedReadOnly,
                           IsOwnerAdminOrReadOnly)
@@ -33,7 +33,7 @@ def favorite(request, recipe_id):
         )
         favorite.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
-    elif request.method == 'POST':
+    if request.method == 'POST':
         serializer = FavoriteSerializer(data=request.data)
         if serializer.is_valid():
             recipe = get_object_or_404(Recipe, pk=recipe_id)
@@ -51,6 +51,7 @@ def favorite(request, recipe_id):
             serializer.errors,
             status=status.HTTP_400_BAD_REQUEST
         )
+    return Response(status=status.HTTP_405_METHOD_NOT_ALLOWED)
 
 
 @api_view(['POST', 'DELETE'])
@@ -64,7 +65,7 @@ def shopping_cart(request, recipe_id):
         )
         shopping_cart.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
-    elif request.method == 'POST':
+    if request.method == 'POST':
         serializer = ShoppingCartSerializer(data=request.data)
         if serializer.is_valid():
             recipe = get_object_or_404(Recipe, pk=recipe_id)
@@ -85,6 +86,7 @@ def shopping_cart(request, recipe_id):
             serializer.errors,
             status=status.HTTP_400_BAD_REQUEST
         )
+    return Response(status=status.HTTP_405_METHOD_NOT_ALLOWED)
 
 
 @api_view(['POST', 'DELETE'])
@@ -98,7 +100,7 @@ def subscribe(request, author_id):
         )
         subscription.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
-    elif request.method == 'POST':
+    if request.method == 'POST':
         serializer = SubscriptionSerializer(
             data=request.data,
             context={'request': request}
@@ -112,6 +114,7 @@ def subscribe(request, author_id):
                             author_id=author.id)
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    return Response(status=status.HTTP_405_METHOD_NOT_ALLOWED)
 
 
 @api_view(['GET'])
@@ -130,10 +133,13 @@ def download_shopping_cart(request):
         ingr_list = []
         ingr = ingredients_queryset[i]
         if ingr['ingredient_id'] in shop_list:
-            ix = shop_list.index(ingr['ingredient_id'])
-            shop_list[ix+1][2] = str(int(shop_list[ix+1][2]) + ingr['amount'])
+            idx = shop_list.index(ingr['ingredient_id']) + 1
+            old_amount = int(shop_list[idx][2])
+            new_amount = old_amount + ingr['amount']
+            shop_list[idx][2] = str(new_amount)
         else:
-            ingredient = Ingredient.objects.get(
+            ingredient = get_object_or_404(
+                Ingredient,
                 id=ingr['ingredient_id']
             )
             ingr_list.append(ingredient.name.capitalize())
@@ -225,46 +231,30 @@ class UserViewSet(mixins.CreateModelMixin,
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
-class RecipeFilter(FilterSet):
-    tags = ModelMultipleChoiceFilter(
-        field_name='tags__slug',
-        to_field_name='slug',
-        conjoined=False,
-        queryset=Tag.objects.all()
-    )
-
-    class Meta:
-        model = Recipe
-        fields = ['author', 'tags']
-
-
 class RecipeViewSet(viewsets.ModelViewSet):
     pagination_class = UserPagination
     permission_classes = [IsOwnerAdminOrReadOnly]
     filter_backends = [DjangoFilterBackend]
     filterset_class = RecipeFilter
 
+    def fav_shop_filter(self, queryset):
+        recipes_id = []
+        for i in range(queryset.count()):
+            recipes_id.append(queryset.values()[i]['recipe_id'])
+        return Recipe.objects.filter(
+            id__in=recipes_id
+        ).order_by('-created')
+
     def get_queryset(self):
         is_favorited = self.request.query_params.get('is_favorited')
         is_in_shopping_cart = self.request.query_params.get(
-            'is_in_shopping_cart'
-        )
-        if is_favorited is not None and is_favorited == '1':
+            'is_in_shopping_cart')
+        if is_favorited is not None and bool(int(is_favorited)):
             favorited = Favorite.objects.filter(user=self.request.user)
-            recipes_id = []
-            for i in range(favorited.count()):
-                recipes_id.append(favorited.values()[i]['recipe_id'])
-            return Recipe.objects.filter(
-                id__in=recipes_id
-            ).order_by('-created')
-        if is_in_shopping_cart is not None and is_in_shopping_cart == '1':
+            return self.fav_shop_filter(favorited)
+        if is_in_shopping_cart is not None and bool(int(is_in_shopping_cart)):
             shopping_cart = ShoppingCart.objects.filter(user=self.request.user)
-            recipes_id = []
-            for i in range(shopping_cart.count()):
-                recipes_id.append(shopping_cart.values()[i]['recipe_id'])
-            return Recipe.objects.filter(
-                id__in=recipes_id
-            ).order_by('-created')
+            return self.fav_shop_filter(shopping_cart)
         return Recipe.objects.all().order_by('-created')
 
     def perform_create(self, serializer):
@@ -280,7 +270,7 @@ class RecipeViewSet(viewsets.ModelViewSet):
         return Response(instance_serializer.data)
 
     def partial_update(self, request, *args, **kwargs):
-        instance = self.queryset.get(pk=kwargs.get('pk'))
+        instance = self.get_object()
         serializer = CreateRecipeSerializer(
             instance, data=request.data, partial=True
         )
@@ -303,14 +293,6 @@ class TagViewSet(mixins.ListModelMixin,
     queryset = Tag.objects.all()
     serializer_class = TagSerializer
     permission_classes = [IsOwnerAdminOrReadOnly]
-
-
-class IngredientFilter(FilterSet):
-    name = CharFilter(field_name='name', lookup_expr='istartswith')
-
-    class Meta:
-        model = Ingredient
-        fields = ['name']
 
 
 class IngredientViewSet(mixins.ListModelMixin,
