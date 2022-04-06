@@ -5,7 +5,7 @@ certifi==2021.5.30
 charset-normalizer==2.0.6
 colorama==0.4.4
 django==2.2.6
-django-extra-fields==0.1
+drf-extra-fields
 django-filter==2.4.0
 djangorestframework==3.12.4
 djangorestframework-simplejwt==4.8.0
