@@ -18,5 +18,8 @@
 ``docker-compose exec backend python manage.py import_i --path data/ingredients.csv``.
 
 Сайт доступен по адресу http://kirer.keenetic.pro/
+
 login admin@mail.ru
+
 pass admin
+
