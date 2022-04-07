@@ -1,4 +1,5 @@
 from django.contrib.auth import update_session_auth_hash
+from django.db.models import Sum
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
 from django_filters.rest_framework import DjangoFilterBackend
@@ -127,30 +128,21 @@ def download_shopping_cart(request):
         recipe_id_list.append(element['recipe_id'])
     ingredients_queryset = Recipe.ingredients.through.objects.filter(
         recipe_id__in=recipe_id_list
-    ).values()
+    ).values(
+        'ingredient__name', 'ingredient__measurement_unit'
+    ).order_by(
+        'ingredient__name'
+    ).annotate(total_amount=Sum('amount'))
     shop_list = []
-    for i in range(ingredients_queryset.count()):
-        ingr_list = []
-        ingr = ingredients_queryset[i]
-        if ingr['ingredient_id'] in shop_list:
-            idx = shop_list.index(ingr['ingredient_id']) + 1
-            old_amount = int(shop_list[idx][2])
-            new_amount = old_amount + ingr['amount']
-            shop_list[idx][2] = str(new_amount)
-        else:
-            ingredient = get_object_or_404(
-                Ingredient,
-                id=ingr['ingredient_id']
-            )
-            ingr_list.append(ingredient.name.capitalize())
-            ingr_list.append(f'({ingredient.measurement_unit}) -')
-            ingr_list.append(str(ingr['amount']))
-            shop_list.append(ingr['ingredient_id'])
-            shop_list.append(ingr_list)
+    for ingredient in ingredients_queryset:
+        ingredient_name = ingredient.get('ingredient__name').capitalize()
+        ingredient_unit = ingredient.get('ingredient__measurement_unit')
+        ingredient_amount = ingredient.get('total_amount')
+        shop_list.append(
+            f'{ingredient_name} ({ingredient_unit}) - {ingredient_amount}'
+        )
     file = open('media/shop_list.txt', 'w')
-    for j in range(len(shop_list) // 2):
-        file.write(' '.join(shop_list[j * 2 + 1]))
-        file.write("\n")
+    file.write('\n'.join(shop_list))
     file.close()
     file = open('media/shop_list.txt', 'r')
     response = HttpResponse(

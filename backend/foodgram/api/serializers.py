@@ -1,12 +1,9 @@
-import base64
-import time
-from drf_extra_fields.fields import Base64ImageField
-from django.shortcuts import get_object_or_404
 from django.contrib.auth.password_validation import validate_password
 from django.core import exceptions as django_exceptions
-from django.core.files.base import ContentFile
 from django.db import IntegrityError, transaction
+from django.shortcuts import get_object_or_404
 from djoser.conf import settings
+from drf_extra_fields.fields import Base64ImageField
 from recipes.models import (Favorite, Ingredient, IngredientAmount, Recipe,
                             ShoppingCart, Tag)
 from rest_framework import serializers
