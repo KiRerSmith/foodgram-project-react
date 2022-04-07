@@ -17,4 +17,6 @@
 5. Импортируйте фикстуры ингредиентов в базу 
 ``docker-compose exec backend python manage.py import_i --path data/ingredients.csv``.
 
-Сайт будет доступен по адресу http://localhost/
+Сайт доступен по адресу http://kirer.keenetic.pro/
+login admin@mail.ru
+pass admin

@@ -162,7 +162,6 @@ class UserViewSet(mixins.CreateModelMixin,
     queryset = User.objects.all()
     serializer_class = UserSerializer
     pagination_class = UserPagination
-    permission_classes = [IsOwnerAdminOrReadOnly]
 
     def retrieve(self, request, pk=None):
         pk_user = get_object_or_404(
