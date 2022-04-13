@@ -1,5 +1,6 @@
 from django.contrib import admin
 
+from .forms import RecipeIngredientForm
 from .models import (Favorite, Ingredient, IngredientAmount, Recipe,
                      ShoppingCart, Tag)
 
@@ -19,7 +20,9 @@ class TagAdmin(admin.ModelAdmin):
 
 class RecipeIngredientInline(admin.TabularInline):
     model = Recipe.ingredients.through
-    extra = 1
+    formset = RecipeIngredientForm
+    extra = 0
+    min_num = 1
 
 
 class RecipeAdmin(admin.ModelAdmin):
@@ -35,6 +38,8 @@ class RecipeAdmin(admin.ModelAdmin):
 
     def favorite_count(self, obj):
         return Favorite.objects.filter(recipe=obj.pk).count()
+
+    favorite_count.short_description = 'Количество избранных'
 
 
 class IngredientAmountAdmin(admin.ModelAdmin):

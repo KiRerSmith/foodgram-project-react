@@ -1,3 +1,4 @@
+from django.conf import settings as djset
 from django.contrib.auth.password_validation import validate_password
 from django.core import exceptions as django_exceptions
 from django.db import IntegrityError, transaction
@@ -148,8 +149,8 @@ class FavoriteRecipeSerializer(serializers.ModelSerializer):
 
 
 class CreateRecipeIngredientSerializer(serializers.ModelSerializer):
-    id = serializers.IntegerField()
-    amount = serializers.IntegerField()
+    id = serializers.IntegerField(min_value=1)
+    amount = serializers.IntegerField(min_value=1, max_value=10000)
 
     class Meta:
         model = Ingredient
@@ -205,6 +206,10 @@ class CreateRecipeSerializer(serializers.ModelSerializer):
         ingredients_list = []
         amount_list = []
         for i in range(len(ingredients_data)):
+            if ingredients_data[i]['id'] in ingredients_list:
+                raise ValidationError(
+                    {'errors': 'Нельзя добавлять одинаковые ингредиенты'}
+                )
             ingredients_list.append(ingredients_data[i]['id'])
             amount_list.append(ingredients_data[i]['amount'])
         ingredients = Ingredient.objects.filter(id__in=ingredients_list)
@@ -225,6 +230,10 @@ class CreateRecipeSerializer(serializers.ModelSerializer):
         ingredients_list = []
         amount_list = []
         for i in range(len(ingredients_data)):
+            if ingredients_data[i]['id'] in ingredients_list:
+                raise ValidationError(
+                    {'errors': 'Нельзя добавлять одинаковые ингредиенты'}
+                )
             ingredients_list.append(ingredients_data[i]['id'])
             amount_list.append(ingredients_data[i]['amount'])
         instance.ingredients.clear()
@@ -328,7 +337,7 @@ class SubscriptionSerializer(serializers.ModelSerializer):
         if limit is not None:
             limit = int(limit)
         else:
-            limit = 2
+            limit = djset.PAGE_LIMIT
         queryset = obj.author.recipes.all()[:limit]
         return FavoriteRecipeSerializer(queryset, many=True).data
 

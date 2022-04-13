@@ -58,14 +58,22 @@ class Recipe(models.Model):
         blank=False, null=True,
         verbose_name='Картинка'
     )
-    text = models.TextField(verbose_name='Описание')
+    text = models.TextField(
+        blank=False, null=True,
+        verbose_name='Описание'
+    )
     ingredients = models.ManyToManyField(
         Ingredient,
+        blank=False,
         through='IngredientAmount',
         through_fields=('recipe', 'ingredient'),
         verbose_name='Ингредиенты'
     )
-    tags = models.ManyToManyField(Tag, verbose_name='Тэги')
+    tags = models.ManyToManyField(
+        Tag,
+        blank=False,
+        verbose_name='Тэги'
+    )
     cooking_time = models.IntegerField(
         'Время приготовления, мин',
         default=1,
@@ -87,13 +95,17 @@ class Recipe(models.Model):
         return self.name
 
     def get_ingredients(self):
-        return "\n".join([i.name for i in self.ingredients.all()])
+        return ',\n'.join([i.name for i in self.ingredients.all()])
 
     def get_tags(self):
-        return "\n".join([i.name for i in self.tags.all()])
+        return ',\n'.join([i.name for i in self.tags.all()])
 
     def count_favorite(self):
         return Favorite.objects.filter(recipe=self.pk).count()
+
+    get_ingredients.short_description = 'Ингредиенты'
+    get_tags.short_description = 'Тэги'
+    count_favorite.short_description = 'Избранно'
 
 
 class IngredientAmount(models.Model):
