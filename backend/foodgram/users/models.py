@@ -13,6 +13,7 @@ class User(AbstractUser):
     username = models.CharField(
         unique=True, blank=False,
         max_length=150)
+    # переопределение поля пароля, т.к. нужно 150 символов вместо 128
     password = models.CharField(blank=False, max_length=150)
     email = models.EmailField(
         unique=True, blank=False,
@@ -32,6 +33,10 @@ class User(AbstractUser):
         verbose_name = 'пользователя'
         verbose_name_plural = 'Пользователи'
         ordering = ['username']
+
+    @property
+    def is_admin(self):
+        return self.role == self.admin
 
 
 class Follow(models.Model):
